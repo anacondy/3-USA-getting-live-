@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>US Political Dashboard 2025</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -138,8 +138,6 @@
                 top: 10px;
                 left: 10px;
                 right: 10px;
-                width: auto;
-                max-width: calc(100% - 20px);
                 padding: 15px;
             }
 
@@ -286,19 +284,37 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // --- 1. INITIALIZE MAP & DARK BASEMAP ---
+        
+        // Constants
+        const MOBILE_ZOOM_LEVEL = 3.5;
+        const DESKTOP_ZOOM_LEVEL = 4;
+        const MOBILE_MIN_ZOOM = 3;
+        const DESKTOP_MIN_ZOOM = 2;
+        const MOBILE_MAX_ZOOM = 10;
+        const DESKTOP_MAX_ZOOM = 19;
+        const SWIPE_THRESHOLD = 100; // Minimum swipe distance to close
+        const MAX_DRAG_DISTANCE = 200; // Maximum visual drag distance
 
-        // Detect mobile device
-        const isMobile = window.matchMedia("(max-width: 768px)").matches;
-
+        // Mobile detection with responsive update
+        let isMobile = window.matchMedia("(max-width: 768px)").matches;
+        
         var map = L.map('map', {
             zoomControl: false,
             attributionControl: false,
             center: [37.8, -96],
-            zoom: isMobile ? 3.5 : 4, // Slightly more zoomed out on mobile
-            minZoom: isMobile ? 3 : 2,
-            maxZoom: isMobile ? 10 : 19,
+            zoom: isMobile ? MOBILE_ZOOM_LEVEL : DESKTOP_ZOOM_LEVEL,
+            minZoom: isMobile ? MOBILE_MIN_ZOOM : DESKTOP_MIN_ZOOM,
+            maxZoom: isMobile ? MOBILE_MAX_ZOOM : DESKTOP_MAX_ZOOM,
             tap: true, // Enable tap interactions for mobile
             tapTolerance: 15 // Increase tap tolerance for better mobile UX
+        });
+        
+        // Update mobile state and map settings on resize
+        window.matchMedia("(max-width: 768px)").addEventListener('change', (e) => {
+            isMobile = e.matches;
+            // Update zoom limits based on new screen size
+            map.setMinZoom(isMobile ? MOBILE_MIN_ZOOM : DESKTOP_MIN_ZOOM);
+            map.setMaxZoom(isMobile ? MOBILE_MAX_ZOOM : DESKTOP_MAX_ZOOM);
         });
 
         // **CRITICAL**: This is the "Dark Matter" tile layer.
@@ -476,51 +492,52 @@
         // Close sidebar on map click (background)
         map.on('click', function(e) {
             // Close sidebar when clicking map background
-            if (!e.originalEvent.target.closest('.leaflet-interactive')) {
+            if (!e.originalEvent || !e.originalEvent.target || !e.originalEvent.target.closest('.leaflet-interactive')) {
                 document.getElementById('sidebar').classList.remove('active');
-                if (isMobile) {
-                    map.flyTo([37.8, -96], 3.5);
-                } else {
-                    map.flyTo([37.8, -96], 4);
-                }
+                map.flyTo([37.8, -96], isMobile ? MOBILE_ZOOM_LEVEL : DESKTOP_ZOOM_LEVEL);
             }
         });
 
-        // Add swipe down to close on mobile
-        if (isMobile) {
-            const sidebar = document.getElementById('sidebar');
-            let startY = 0;
-            let currentY = 0;
-            
-            sidebar.addEventListener('touchstart', function(e) {
+        // Add swipe down to close functionality (works on all touch devices)
+        const sidebar = document.getElementById('sidebar');
+        let startY = 0;
+        let currentY = 0;
+        
+        sidebar.addEventListener('touchstart', function(e) {
+            // Only enable swipe if we're in mobile layout
+            if (isMobile) {
                 startY = e.touches[0].clientY;
-            }, { passive: true });
-            
-            sidebar.addEventListener('touchmove', function(e) {
+            }
+        }, { passive: true });
+        
+        sidebar.addEventListener('touchmove', function(e) {
+            if (isMobile && startY > 0) {
                 currentY = e.touches[0].clientY;
                 const diff = currentY - startY;
                 
                 // Only allow dragging down
-                if (diff > 0 && diff < 200) {
+                if (diff > 0 && diff < MAX_DRAG_DISTANCE) {
                     sidebar.style.transform = `translateY(${diff}px)`;
                 }
-            }, { passive: true });
-            
-            sidebar.addEventListener('touchend', function(e) {
+            }
+        }, { passive: true });
+        
+        sidebar.addEventListener('touchend', function(e) {
+            if (isMobile && startY > 0) {
                 const diff = currentY - startY;
                 
-                // If dragged down more than 100px, close the sidebar
-                if (diff > 100) {
+                // If dragged down more than threshold, close the sidebar
+                if (diff > SWIPE_THRESHOLD) {
                     sidebar.classList.remove('active');
-                    map.flyTo([37.8, -96], 3.5);
+                    map.flyTo([37.8, -96], MOBILE_ZOOM_LEVEL);
                 }
                 
                 // Reset transform
                 sidebar.style.transform = '';
-                startY = 0;
-                currentY = 0;
-            }, { passive: true });
-        }
+            }
+            startY = 0;
+            currentY = 0;
+        }, { passive: true });
 
 
         // --- 6. LOAD DATA ---
