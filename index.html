@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>US Political Dashboard 2025</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
@@ -129,6 +129,144 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
+        /* --- 3. MOBILE OPTIMIZATIONS --- */
+        
+        /* Mobile and Tablet Responsive Design */
+        @media only screen and (max-width: 768px) {
+            /* Header adjustments for mobile */
+            .glass-header {
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                width: auto;
+                max-width: calc(100% - 20px);
+                padding: 15px;
+            }
+
+            .glass-header h1 {
+                font-size: 18px;
+                line-height: 1.2;
+            }
+
+            .glass-header p {
+                font-size: 11px;
+                margin: 3px 0 0 0;
+            }
+
+            /* Sidebar becomes bottom sheet on mobile */
+            .info-sidebar {
+                top: auto;
+                bottom: -100%;
+                left: 0;
+                right: 0;
+                width: 100%;
+                max-height: 70vh;
+                border-radius: 20px 20px 0 0;
+                border-left: none;
+                border-top: 1px solid rgba(255, 255, 255, 0.08);
+                box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+                padding: 20px;
+                overflow-y: auto;
+                transition: bottom 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+
+            .info-sidebar.active {
+                bottom: 0;
+                right: auto;
+            }
+
+            /* Adjust sidebar content for mobile */
+            .sidebar-title {
+                font-size: 24px;
+                margin: 0 0 15px 0;
+            }
+
+            .data-section {
+                margin-bottom: 20px;
+                padding-bottom: 12px;
+            }
+
+            .data-label {
+                font-size: 10px;
+                margin-bottom: 6px;
+            }
+
+            .data-value {
+                font-size: 14px;
+            }
+
+            .members-list {
+                max-height: 200px;
+            }
+
+            .members-list li {
+                padding: 8px;
+                font-size: 13px;
+            }
+
+            /* Improve map interaction for touch */
+            #map {
+                height: 100vh;
+                touch-action: pan-x pan-y;
+            }
+
+            /* Ensure state badge is readable */
+            .state-badge {
+                font-size: 11px;
+                padding: 3px 10px;
+            }
+        }
+
+        /* Extra small devices (phones in portrait mode) */
+        @media only screen and (max-width: 480px) {
+            .glass-header h1 {
+                font-size: 16px;
+            }
+
+            .glass-header p {
+                font-size: 10px;
+            }
+
+            .sidebar-title {
+                font-size: 20px;
+            }
+
+            .info-sidebar {
+                padding: 15px;
+                max-height: 75vh;
+            }
+
+            .data-value {
+                font-size: 13px;
+            }
+
+            .members-list li {
+                font-size: 12px;
+                padding: 6px;
+            }
+        }
+
+        /* Improve touch targets for all mobile devices */
+        @media (hover: none) and (pointer: coarse) {
+            /* Better touch areas */
+            .members-list li {
+                min-height: 44px; /* Apple's recommended minimum touch target */
+                padding: 12px 10px;
+            }
+
+            /* Prevent text selection during interactions */
+            .glass-header,
+            .info-sidebar {
+                -webkit-user-select: none;
+                user-select: none;
+            }
+
+            /* Remove hover effects on touch devices */
+            .members-list li:hover {
+                background: rgba(255,255,255,0.03);
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -149,11 +287,18 @@
     <script>
         // --- 1. INITIALIZE MAP & DARK BASEMAP ---
 
+        // Detect mobile device
+        const isMobile = window.matchMedia("(max-width: 768px)").matches;
+
         var map = L.map('map', {
             zoomControl: false,
             attributionControl: false,
             center: [37.8, -96],
-            zoom: 4
+            zoom: isMobile ? 3.5 : 4, // Slightly more zoomed out on mobile
+            minZoom: isMobile ? 3 : 2,
+            maxZoom: isMobile ? 10 : 19,
+            tap: true, // Enable tap interactions for mobile
+            tapTolerance: 15 // Increase tap tolerance for better mobile UX
         });
 
         // **CRITICAL**: This is the "Dark Matter" tile layer.
@@ -269,8 +414,9 @@
             var stateName = layer.feature.properties.name;
             var party = partyData[stateName] || "Unknown";
 
-            // 1. Map Animation
-            map.flyToBounds(layer.getBounds(), { padding: [50, 50], duration: 1.5 });
+            // 1. Map Animation - adjust for mobile
+            const padding = isMobile ? [20, 20] : [50, 50];
+            map.flyToBounds(layer.getBounds(), { padding: padding, duration: 1.5 });
 
             // 2. Update Sidebar Data
             updateSidebar(stateName, party);
@@ -294,6 +440,7 @@
             const badgeClass = party === 'R' ? 'badge-rep' : 'badge-dem';
 
             const html = `
+                ${isMobile ? '<div style="width: 40px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 0 auto 15px auto;"></div>' : ''}
                 <span class="state-badge ${badgeClass}">Governor: ${data.gov}</span>
                 <h2 class="sidebar-title">${stateName}</h2>
 
@@ -320,6 +467,7 @@
                         ${data.description}
                     </div>
                 </div>
+                ${isMobile ? '<div style="text-align: center; margin-top: 20px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 12px; color: #888;">Tap the map to close</div>' : ''}
             `;
 
             document.getElementById('sidebar-content').innerHTML = html;
@@ -327,13 +475,52 @@
 
         // Close sidebar on map click (background)
         map.on('click', function(e) {
-            // Only close if we didn't click a feature (requires checking target)
-            // Simplified: clicking the dark ocean zooms out
-             if (e.originalEvent.target.id === 'map') {
-                 document.getElementById('sidebar').classList.remove('active');
-                 map.flyTo([37.8, -96], 4);
-             }
+            // Close sidebar when clicking map background
+            if (!e.originalEvent.target.closest('.leaflet-interactive')) {
+                document.getElementById('sidebar').classList.remove('active');
+                if (isMobile) {
+                    map.flyTo([37.8, -96], 3.5);
+                } else {
+                    map.flyTo([37.8, -96], 4);
+                }
+            }
         });
+
+        // Add swipe down to close on mobile
+        if (isMobile) {
+            const sidebar = document.getElementById('sidebar');
+            let startY = 0;
+            let currentY = 0;
+            
+            sidebar.addEventListener('touchstart', function(e) {
+                startY = e.touches[0].clientY;
+            }, { passive: true });
+            
+            sidebar.addEventListener('touchmove', function(e) {
+                currentY = e.touches[0].clientY;
+                const diff = currentY - startY;
+                
+                // Only allow dragging down
+                if (diff > 0 && diff < 200) {
+                    sidebar.style.transform = `translateY(${diff}px)`;
+                }
+            }, { passive: true });
+            
+            sidebar.addEventListener('touchend', function(e) {
+                const diff = currentY - startY;
+                
+                // If dragged down more than 100px, close the sidebar
+                if (diff > 100) {
+                    sidebar.classList.remove('active');
+                    map.flyTo([37.8, -96], 3.5);
+                }
+                
+                // Reset transform
+                sidebar.style.transform = '';
+                startY = 0;
+                currentY = 0;
+            }, { passive: true });
+        }
 
 
         // --- 6. LOAD DATA ---
