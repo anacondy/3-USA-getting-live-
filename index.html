@@ -178,6 +178,7 @@
 
             /* Internal scrollable container for sidebar content */
             .sidebar-scroll {
+                /* Subtract padding (20px top + 20px bottom) for accurate height */
                 max-height: calc(var(--sidebar-vh, 80vh) - 40px - env(safe-area-inset-bottom));
                 overflow-y: auto;
                 overflow-x: hidden;
@@ -356,6 +357,15 @@
         const DESKTOP_MAX_ZOOM = 19;
         const SWIPE_THRESHOLD = 100; // Minimum swipe distance to close
         const MAX_DRAG_DISTANCE = 200; // Maximum visual drag distance
+        
+        // Sidebar sizing constants
+        const ASPECT_RATIO_20_9 = 20 / 9; // Very tall phones (e.g., Galaxy S21)
+        const ASPECT_RATIO_16_9 = 16 / 9; // Standard tall phones (e.g., iPhone 11)
+        const VH_FACTOR_VERY_TALL = 0.76; // 76vh for 20:9+ devices
+        const VH_FACTOR_TALL = 0.80; // 80vh for 16:9 devices
+        const VH_FACTOR_STANDARD = 0.85; // 85vh for other mobile devices
+        const MAP_PAN_FACTOR = 0.18; // Pan map by 18% of sidebar height
+        const SIDEBAR_SHOW_DELAY = 100; // Delay before panning map when showing sidebar
 
         // Mobile detection with responsive update
         let isMobile = window.matchMedia("(max-width: 768px)").matches;
@@ -520,16 +530,16 @@
             const aspectRatio = window.innerHeight / window.innerWidth;
             let vhFactor;
             
-            // Determine vh factor based on aspect ratio
-            if (aspectRatio >= 20/9) {
+            // Determine vh factor based on aspect ratio using named constants
+            if (aspectRatio >= ASPECT_RATIO_20_9) {
                 // 20:9 and taller devices (very tall phones)
-                vhFactor = 0.76;
-            } else if (aspectRatio >= 16/9) {
+                vhFactor = VH_FACTOR_VERY_TALL;
+            } else if (aspectRatio >= ASPECT_RATIO_16_9) {
                 // 16:9 devices (standard tall phones)
-                vhFactor = 0.80;
+                vhFactor = VH_FACTOR_TALL;
             } else {
                 // Other mobile devices (tablets, wider phones)
-                vhFactor = 0.85;
+                vhFactor = VH_FACTOR_STANDARD;
             }
             
             const sidebarVh = vhFactor * 100;
@@ -545,7 +555,7 @@
             // Pan map back down on mobile to restore view
             if (isMobile) {
                 const sidebarHeight = sidebar.offsetHeight || 0;
-                const panY = Math.max(50, sidebarHeight * 0.18);
+                const panY = Math.max(50, sidebarHeight * MAP_PAN_FACTOR);
                 map.panBy([0, panY], { animate: true, duration: 0.3 });
             }
             
@@ -610,9 +620,9 @@
             if (isMobile) {
                 setTimeout(() => {
                     const sidebarHeight = sidebar.offsetHeight || 0;
-                    const panY = -Math.max(50, sidebarHeight * 0.18);
+                    const panY = -Math.max(50, sidebarHeight * MAP_PAN_FACTOR);
                     map.panBy([0, panY], { animate: true, duration: 0.3 });
-                }, 100);
+                }, SIDEBAR_SHOW_DELAY);
             }
         }
 
