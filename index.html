@@ -365,6 +365,7 @@
         const VH_FACTOR_TALL = 0.80; // 80vh for 16:9 devices
         const VH_FACTOR_STANDARD = 0.85; // 85vh for other mobile devices
         const MAP_PAN_FACTOR = 0.18; // Pan map by 18% of sidebar height
+        const MIN_PAN_DISTANCE = 50; // Minimum pan distance in pixels
         const SIDEBAR_SHOW_DELAY = 100; // Delay before panning map when showing sidebar
 
         // Mobile detection with responsive update
@@ -520,6 +521,9 @@
 
         // --- 5. SIDEBAR LOGIC ---
 
+        // Get sidebar element reference (must be declared before functions that use it)
+        const sidebar = document.getElementById('sidebar');
+
         /**
          * Apply dynamic sidebar sizing based on device aspect ratio
          * This ensures the sidebar is fully visible on 16:9 and 20:9 devices
@@ -555,7 +559,7 @@
             // Pan map back down on mobile to restore view
             if (isMobile) {
                 const sidebarHeight = sidebar.offsetHeight || 0;
-                const panY = Math.max(50, sidebarHeight * MAP_PAN_FACTOR);
+                const panY = Math.max(MIN_PAN_DISTANCE, sidebarHeight * MAP_PAN_FACTOR);
                 map.panBy([0, panY], { animate: true, duration: 0.3 });
             }
             
@@ -620,7 +624,7 @@
             if (isMobile) {
                 setTimeout(() => {
                     const sidebarHeight = sidebar.offsetHeight || 0;
-                    const panY = -Math.max(50, sidebarHeight * MAP_PAN_FACTOR);
+                    const panY = -Math.max(MIN_PAN_DISTANCE, sidebarHeight * MAP_PAN_FACTOR);
                     map.panBy([0, panY], { animate: true, duration: 0.3 });
                 }, SIDEBAR_SHOW_DELAY);
             }
@@ -635,7 +639,6 @@
         });
 
         // Add swipe down to close functionality (works on all touch devices)
-        const sidebar = document.getElementById('sidebar');
         let startY = 0;
         let currentY = 0;
         
