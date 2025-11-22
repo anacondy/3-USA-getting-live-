@@ -294,7 +294,8 @@
 
             .info-sidebar {
                 padding: 15px;
-                max-height: 75vh;
+                /* Use dynamic vh variable for consistency with aspect ratio logic */
+                max-height: var(--sidebar-vh, 75vh);
             }
 
             .data-value {
@@ -623,9 +624,12 @@
             // Pan map upward on mobile so content remains visible behind sheet
             if (isMobile) {
                 setTimeout(() => {
-                    const sidebarHeight = sidebar.offsetHeight || 0;
-                    const panY = -Math.max(MIN_PAN_DISTANCE, sidebarHeight * MAP_PAN_FACTOR);
-                    map.panBy([0, panY], { animate: true, duration: 0.3 });
+                    // Only pan if sidebar is still active (prevent race condition)
+                    if (sidebar.classList.contains('active')) {
+                        const sidebarHeight = sidebar.offsetHeight || 0;
+                        const panY = -Math.max(MIN_PAN_DISTANCE, sidebarHeight * MAP_PAN_FACTOR);
+                        map.panBy([0, panY], { animate: true, duration: 0.3 });
+                    }
                 }, SIDEBAR_SHOW_DELAY);
             }
         }
