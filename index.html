@@ -151,26 +151,53 @@
                 margin: 3px 0 0 0;
             }
 
-            /* Sidebar becomes bottom sheet on mobile */
+            /* Sidebar becomes fixed bottom sheet on mobile with aspect ratio support */
             .info-sidebar {
+                position: fixed;
                 top: auto;
                 bottom: -100%;
                 left: 0;
                 right: 0;
                 width: 100%;
-                max-height: 70vh;
+                /* Use CSS variable for dynamic height based on aspect ratio */
+                max-height: var(--sidebar-vh, 80vh);
                 border-radius: 20px 20px 0 0;
                 border-left: none;
                 border-top: 1px solid rgba(255, 255, 255, 0.08);
                 box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
                 padding: 20px;
-                overflow-y: auto;
-                transition: bottom 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+                padding-bottom: calc(20px + env(safe-area-inset-bottom)); /* iOS safe area support */
+                overflow: hidden; /* Changed from overflow-y: auto to enable internal scrolling */
+                transition: bottom 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s ease-out;
             }
 
             .info-sidebar.active {
                 bottom: 0;
                 right: auto;
+            }
+
+            /* Internal scrollable container for sidebar content */
+            .sidebar-scroll {
+                /* Subtract padding (20px top + 20px bottom) for accurate height */
+                max-height: calc(var(--sidebar-vh, 80vh) - 40px - env(safe-area-inset-bottom));
+                overflow-y: auto;
+                overflow-x: hidden;
+                -webkit-overflow-scrolling: touch;
+                padding-right: 5px;
+            }
+
+            /* Drag handle styling for mobile sheet */
+            .drag-handle {
+                width: 40px;
+                height: 4px;
+                background: rgba(255, 255, 255, 0.3);
+                border-radius: 2px;
+                margin: 0 auto 15px auto;
+                cursor: grab;
+            }
+
+            .drag-handle:active {
+                cursor: grabbing;
             }
 
             /* Adjust sidebar content for mobile */
@@ -215,6 +242,42 @@
             }
         }
 
+        /* Desktop - ensure original behavior is preserved */
+        @media only screen and (min-width: 900px) {
+            .info-sidebar {
+                position: absolute; /* Original desktop positioning */
+                top: 20px;
+                right: -400px;
+                bottom: 20px;
+                left: auto;
+                width: 320px;
+                max-height: none;
+                border-radius: 20px 0 0 20px;
+                border-left: 1px solid rgba(255, 255, 255, 0.08);
+                border-top: none;
+                padding: 30px;
+                overflow-y: auto;
+                transition: right 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+
+            .info-sidebar.active {
+                right: 0;
+                bottom: 20px;
+            }
+
+            /* Hide drag handle on desktop */
+            .drag-handle {
+                display: none;
+            }
+
+            /* No need for scroll wrapper on desktop */
+            .sidebar-scroll {
+                max-height: none;
+                overflow: visible;
+                padding-right: 0;
+            }
+        }
+
         /* Extra small devices (phones in portrait mode) */
         @media only screen and (max-width: 480px) {
             .glass-header h1 {
@@ -231,7 +294,8 @@
 
             .info-sidebar {
                 padding: 15px;
-                max-height: 75vh;
+                /* Use dynamic vh variable for consistency with aspect ratio logic */
+                max-height: var(--sidebar-vh, 75vh);
             }
 
             .data-value {
@@ -294,6 +358,16 @@
         const DESKTOP_MAX_ZOOM = 19;
         const SWIPE_THRESHOLD = 100; // Minimum swipe distance to close
         const MAX_DRAG_DISTANCE = 200; // Maximum visual drag distance
+        
+        // Sidebar sizing constants
+        const ASPECT_RATIO_20_9 = 20 / 9; // Very tall phones (e.g., Galaxy S21)
+        const ASPECT_RATIO_16_9 = 16 / 9; // Standard tall phones (e.g., iPhone 11)
+        const VH_FACTOR_VERY_TALL = 0.76; // 76vh for 20:9+ devices
+        const VH_FACTOR_TALL = 0.80; // 80vh for 16:9 devices
+        const VH_FACTOR_STANDARD = 0.85; // 85vh for other mobile devices
+        const MAP_PAN_FACTOR = 0.18; // Pan map by 18% of sidebar height
+        const MIN_PAN_DISTANCE = 50; // Minimum pan distance in pixels
+        const SIDEBAR_SHOW_DELAY = 100; // Delay before panning map when showing sidebar
 
         // Mobile detection with responsive update
         let isMobile = window.matchMedia("(max-width: 768px)").matches;
@@ -434,11 +508,8 @@
             const padding = isMobile ? [20, 20] : [50, 50];
             map.flyToBounds(layer.getBounds(), { padding: padding, duration: 1.5 });
 
-            // 2. Update Sidebar Data
+            // 2. Update Sidebar Data (this now handles showing the sidebar)
             updateSidebar(stateName, party);
-
-            // 3. Show Sidebar
-            document.getElementById('sidebar').classList.add('active');
         }
 
         function onEachFeature(feature, layer) {
@@ -451,12 +522,58 @@
 
         // --- 5. SIDEBAR LOGIC ---
 
+        // Get sidebar element reference (must be declared before functions that use it)
+        const sidebar = document.getElementById('sidebar');
+
+        /**
+         * Apply dynamic sidebar sizing based on device aspect ratio
+         * This ensures the sidebar is fully visible on 16:9 and 20:9 devices
+         */
+        function applySidebarSizing() {
+            if (!isMobile) return; // Only apply on mobile
+            
+            const aspectRatio = window.innerHeight / window.innerWidth;
+            let vhFactor;
+            
+            // Determine vh factor based on aspect ratio using named constants
+            if (aspectRatio >= ASPECT_RATIO_20_9) {
+                // 20:9 and taller devices (very tall phones)
+                vhFactor = VH_FACTOR_VERY_TALL;
+            } else if (aspectRatio >= ASPECT_RATIO_16_9) {
+                // 16:9 devices (standard tall phones)
+                vhFactor = VH_FACTOR_TALL;
+            } else {
+                // Other mobile devices (tablets, wider phones)
+                vhFactor = VH_FACTOR_STANDARD;
+            }
+            
+            const sidebarVh = vhFactor * 100;
+            sidebar.style.setProperty('--sidebar-vh', `${sidebarVh}vh`);
+        }
+
+        /**
+         * Close sidebar and restore map view
+         */
+        function closeSidebar() {
+            sidebar.classList.remove('active');
+            
+            // Pan map back down on mobile to restore view
+            if (isMobile) {
+                const sidebarHeight = sidebar.offsetHeight || 0;
+                const panY = Math.max(MIN_PAN_DISTANCE, sidebarHeight * MAP_PAN_FACTOR);
+                map.panBy([0, panY], { animate: true, duration: 0.3 });
+            }
+            
+            // Reset to overview
+            map.flyTo([37.8, -96], isMobile ? MOBILE_ZOOM_LEVEL : DESKTOP_ZOOM_LEVEL);
+        }
+
         function updateSidebar(stateName, party) {
             const data = getMockData(stateName, party);
             const badgeClass = party === 'R' ? 'badge-rep' : 'badge-dem';
 
-            const html = `
-                ${isMobile ? '<div style="width: 40px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; margin: 0 auto 15px auto;"></div>' : ''}
+            // Build the content HTML with drag handle and scrollable wrapper for mobile
+            const contentHtml = `
                 <span class="state-badge ${badgeClass}">Governor: ${data.gov}</span>
                 <h2 class="sidebar-title">${stateName}</h2>
 
@@ -486,20 +603,46 @@
                 ${isMobile ? '<div style="text-align: center; margin-top: 20px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 12px; color: #888;">Tap the map to close</div>' : ''}
             `;
 
-            document.getElementById('sidebar-content').innerHTML = html;
+            // Inject drag handle and scrollable wrapper on mobile
+            if (isMobile) {
+                document.getElementById('sidebar-content').innerHTML = `
+                    <div class="drag-handle"></div>
+                    <div class="sidebar-scroll">
+                        ${contentHtml}
+                    </div>
+                `;
+            } else {
+                document.getElementById('sidebar-content').innerHTML = contentHtml;
+            }
+
+            // Apply sizing before showing
+            applySidebarSizing();
+            
+            // Show sidebar
+            sidebar.classList.add('active');
+            
+            // Pan map upward on mobile so content remains visible behind sheet
+            if (isMobile) {
+                setTimeout(() => {
+                    // Only pan if sidebar is still active (prevent race condition)
+                    if (sidebar.classList.contains('active')) {
+                        const sidebarHeight = sidebar.offsetHeight || 0;
+                        const panY = -Math.max(MIN_PAN_DISTANCE, sidebarHeight * MAP_PAN_FACTOR);
+                        map.panBy([0, panY], { animate: true, duration: 0.3 });
+                    }
+                }, SIDEBAR_SHOW_DELAY);
+            }
         }
 
         // Close sidebar on map click (background)
         map.on('click', function(e) {
             // Close sidebar when clicking map background
             if (!e.originalEvent || !e.originalEvent.target || !e.originalEvent.target.closest('.leaflet-interactive')) {
-                document.getElementById('sidebar').classList.remove('active');
-                map.flyTo([37.8, -96], isMobile ? MOBILE_ZOOM_LEVEL : DESKTOP_ZOOM_LEVEL);
+                closeSidebar();
             }
         });
 
         // Add swipe down to close functionality (works on all touch devices)
-        const sidebar = document.getElementById('sidebar');
         let startY = 0;
         let currentY = 0;
         
@@ -517,6 +660,8 @@
                 
                 // Only allow dragging down
                 if (diff > 0 && diff < MAX_DRAG_DISTANCE) {
+                    // Temporarily disable transition for smooth drag
+                    sidebar.style.transition = 'none';
                     sidebar.style.transform = `translateY(${diff}px)`;
                 }
             }
@@ -526,10 +671,12 @@
             if (isMobile && startY > 0) {
                 const diff = currentY - startY;
                 
+                // Re-enable transition for smooth animation
+                sidebar.style.transition = 'bottom 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s ease-out';
+                
                 // If dragged down more than threshold, close the sidebar
                 if (diff > SWIPE_THRESHOLD) {
-                    sidebar.classList.remove('active');
-                    map.flyTo([37.8, -96], MOBILE_ZOOM_LEVEL);
+                    closeSidebar();
                 }
                 
                 // Reset transform
@@ -538,6 +685,11 @@
             startY = 0;
             currentY = 0;
         }, { passive: true });
+
+        // Call applySidebarSizing on load, resize, and orientation change
+        window.addEventListener('resize', applySidebarSizing);
+        window.addEventListener('orientationchange', applySidebarSizing);
+        applySidebarSizing(); // Initial call
 
 
         // --- 6. LOAD DATA ---
